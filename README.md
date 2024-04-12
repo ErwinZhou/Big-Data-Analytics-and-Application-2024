@@ -7,11 +7,9 @@
 
 >**Team Member:**
 >
->* Yuchen Zhou 
->
->* Tongxi Wu
->
->* Yafei Hu
+>* Yuchen Zhou `ErwinZhou`
+>* Tongxi Wu  `InfinityUniverse0`
+>* Yafei Hu `hyf2002`
 
 Feel free to contact me on ErwinZhou@outlook.com
 
