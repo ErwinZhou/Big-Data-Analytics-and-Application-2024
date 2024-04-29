@@ -76,7 +76,7 @@ int main(int argc, char* argv[]) {
     std::string savePath;
 
     std::cout << "Saving Adjacency Matrix..." << std::endl;
-    savePath = baseDir / DEFAULT_FILE_NAME;
+    savePath = (baseDir / DEFAULT_FILE_NAME).string();
     saveAdjacencyMatrix(savePath, adjacencyMatrix, numNodes);
     std::cout << "Adjacency Matrix Saved to " << savePath << std::endl;
 

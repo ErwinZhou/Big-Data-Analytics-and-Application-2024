@@ -113,7 +113,7 @@ void breakIntoStripes(const AdjacencyEntry* adjacencyMatrix, int numNodes, int n
     }
     for (int i = 0; i < numStripes; i++) {
         std::string filename = prefix + std::to_string(i) + ".txt";
-        filename = basePath / filename;
+        filename = (basePath / filename).string();
         fileArr[i].open(filename);
 
         if (!fileArr[i].is_open()) {
