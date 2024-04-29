@@ -86,7 +86,7 @@ void pageRankByBlockStripe(const std::string &dir, const std::string &prefix, in
             }
 
             std::string filename = prefix + std::to_string(blockID) + ".txt";
-            filename = basePath / filename;
+            filename = (basePath / filename).string();
             std::ifstream file(filename);
             if (!file.is_open()) {
                 std::cerr << "Error: Unable to open file " << filename << std::endl;
