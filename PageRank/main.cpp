@@ -6,18 +6,18 @@
 #include "preprocess.h"
 #include "pagerank.h"
 
-
-int main() {
+int main()
+{
     std::string filename = "Data.txt";
     std::cout << "Getting Total Number of Nodes..." << std::endl;
     int numNodes = getNumNodes(filename);
-    AdjacencyEntry* adjacencyMatrix = new AdjacencyEntry[numNodes + 1];
+    AdjacencyEntry *adjacencyMatrix = new AdjacencyEntry[numNodes + 1];
     std::cout << "Number of Nodes: " << numNodes << std::endl;
 
     std::cout << "Getting Adjacency Matrix..." << std::endl;
     getAdjacencyMatrix(filename, adjacencyMatrix, numNodes);
 
-    double* pageRankScores = new double[numNodes + 1];
+    double *pageRankScores = new double[numNodes + 1];
     std::cout << "Calculating PageRank Scores..." << std::endl;
     pageRank(adjacencyMatrix, numNodes, 0.85, pageRankScores, DEFAULT_TOLERANCE);
 
