@@ -20,4 +20,10 @@ void getAdjacencyMatrix(const std::string &filename, AdjacencyEntry* &adjacencyM
 // Save the adjacency matrix to a file
 bool saveAdjacencyMatrix(const std::string &filename, const AdjacencyEntry* adjacencyMatrix, int numNodes);
 
+// Break adjacency matrix into stripes
+void breakIntoStripes(const AdjacencyEntry* adjacencyMatrix, int numNodes, int numStripes, AdjacencyEntry** &stripes);
+
+// Break adjacency matrix into stripes and save to files
+void breakIntoStripes(const AdjacencyEntry* adjacencyMatrix, int numNodes, int numStripes, const std::string &saveDir = DEFAULT_TMP_DIR, const std::string &prefix = DEFAULT_FILE_NAME);
+
 #endif //PAGERANK_PREPROCESS_H
