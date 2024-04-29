@@ -73,6 +73,10 @@ void breakIntoStripes(const AdjacencyEntry* adjacencyMatrix, int numNodes, int n
     }
 
     const int stripeSize = (numNodes + numStripes - 1) / numStripes;
+    if (stripeSize < 1) {
+        std::cerr << "Error: Number of Stripes is too large" << std::endl;
+        exit(1);
+    }
     for (int i = 0; i < numStripes; i++) {
         stripes[i] = new AdjacencyEntry[stripeSize + 1];
     }
@@ -103,6 +107,10 @@ void breakIntoStripes(const AdjacencyEntry* adjacencyMatrix, int numNodes, int n
     auto *fileArr = new std::ofstream[numStripes];
 
     const int stripeSize = (numNodes + numStripes - 1) / numStripes;
+    if (stripeSize < 1) {
+        std::cerr << "Error: Number of Stripes is too large" << std::endl;
+        exit(1);
+    }
     for (int i = 0; i < numStripes; i++) {
         std::string filename = prefix + std::to_string(i) + ".txt";
         filename = basePath / filename;
