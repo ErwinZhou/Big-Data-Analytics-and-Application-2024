@@ -56,7 +56,7 @@ Then, run the below command to execute the PageRank program:
 
 You need to put your dataset file in the same dir with the generated executable file `PageRank` , and rename it as `Data.txt` .
 
-The format of the lines in the file is as follow:
+The format of the lines in the file is as follows:
 
 ```
 FromNodeID ToNodeID
