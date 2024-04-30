@@ -130,20 +130,18 @@ void breakIntoStripes(const AdjacencyEntry* adjacencyMatrix, int numNodes, int n
             while (stripeIndex < (numStripes - 1) && element > boundary) {
                 stripeIndex++;
                 boundary += stripeSize;
-                fileArr[stripeIndex] << i << " " << adjacencyMatrix[i].outDegree;
+                fileArr[stripeIndex] << i << " " << outDegree;
             }
             fileArr[stripeIndex] << " " << element;
         }
 
-        if (outDegree == 0) { // Dead end
-            for (int stripeId = 0; stripeId < numStripes; stripeId++) {
-                fileArr[stripeId] << i << " " << 0;
-                fileArr[stripeId] << std::endl;
-            }
-        } else {
-            for (int stripeId = 0; stripeId < numStripes; stripeId++) {
-                fileArr[stripeId] << std::endl;
-            }
+        while (stripeIndex < numStripes - 1) {
+            stripeIndex++;
+            fileArr[stripeIndex] << i << " " << outDegree;
+        }
+
+        for (int stripeId = 0; stripeId < numStripes; stripeId++) {
+            fileArr[stripeId] << std::endl;
         }
     }
 
