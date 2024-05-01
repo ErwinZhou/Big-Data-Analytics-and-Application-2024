@@ -3,12 +3,13 @@
 ## Introduction
 
 PageRank is an algorithm used by Google Search to rank web pages in their search engine results. It is a way of measuring the importance of website pages.
-We implemented  the basic PageRank algorithmn to compute the scores based on a given Dataset(Data.txt).
-Based that, we optimize the robustness and efficiency of our algorithmn by the following works:
+We implemented  the basic PageRank algorithm to compute the scores based on a given Dataset(Data.txt).
+Based that, we optimize the robustness and efficiency of our algorithm by the following works:
+
 - Considering the case of dead ends and spider traps.
 - Using the power iteration method to compute the PageRank scores.
 - Optimizing on sparse matrix.
-- Deployment the Block-Strip Update Algorithmn.
+- Deployment the Block-Strip Update Algorithm.
 
 ## Features
 
@@ -52,6 +53,15 @@ Then, run the below command to execute the PageRank program:
 >
 > **WARNING:** Although the default directory of `PageRank` is in the same directory with `CMakeLists.txt` , that depends on your build system.
 
+**Usage**:
+
+```sh
+Usage: ./PageRank [-beta <beta>] [-block <numBlocks>]
+Options:
+  -beta <beta>        Damping factor (default: 0.85)
+  -block <numBlocks>  Number of blocks (default: using Basic Update Algorithm)
+```
+
 ### DataSet
 
 You need to put your dataset file in the same dir with the generated executable file `PageRank` , and rename it as `Data.txt` .
@@ -71,10 +81,3 @@ The result is saved in `.txt` . Each line contains:
 ```
 NodeID Score
 ```
-
-## Dataset
-
-## Deployment:
-- Platfrom: Linux 
-- Language: C++
-
