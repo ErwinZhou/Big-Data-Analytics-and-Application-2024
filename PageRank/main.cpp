@@ -101,6 +101,12 @@ int main(int argc, char* argv[]) {
     savePageRankScores(savePath, pageRankScores, numNodes);
     std::cout << "PageRank Scores Saved to "<< savePath << std::endl;
 
+    // Sort and Save Results
+    std::cout << "Sorting and Saving PageRank Scores..." << std::endl;
+    savePath = "SortedPageRankScores.txt";
+    sortAndSavePageRankScores(savePath, pageRankScores, numNodes);
+    std::cout << "Sorted PageRank Scores Saved to " << savePath << std::endl;
+
     delete[] adjacencyMatrix;
     delete[] pageRankScores;
 

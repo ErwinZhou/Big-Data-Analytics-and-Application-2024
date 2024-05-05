@@ -145,3 +145,32 @@ bool savePageRankScores(const std::string &filename, const double *pageRankScore
     file.close();
     return true;
 }
+
+bool sortAndSavePageRankScores(const std::string &filename, const double *pageRankScores, int numNodes) {
+    std::vector< std::pair<int, double> > scores;
+    for (int i = 1; i <= numNodes; i++) {
+        scores.emplace_back(i, pageRankScores[i]);
+    }
+
+    std::sort(scores.begin(), scores.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b) {
+        return a.second > b.second;
+    });
+
+    std::filesystem::path p = filename;
+    if (!p.parent_path().empty() && !std::filesystem::exists(p.parent_path())) {
+        // Create the directory(s) if not exist
+        std::filesystem::create_directories(p.parent_path());
+    }
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Error: Unable to open file " << filename << std::endl;
+        return false;
+    }
+
+    for (const auto &score : scores) {
+        file << score.first << " " << score.second << std::endl;
+    }
+
+    file.close();
+    return true;
+}

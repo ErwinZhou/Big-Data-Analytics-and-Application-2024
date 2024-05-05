@@ -36,4 +36,11 @@ bool savePageRankScores(
         int numNodes
 );
 
+// Sort and Save PageRank Scores
+bool sortAndSavePageRankScores(
+        const std::string &filename,
+        const double* pageRankScores,
+        int numNodes
+);
+
 #endif //PAGERANK_PAGERANK_H
