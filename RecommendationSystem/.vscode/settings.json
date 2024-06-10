@@ -1,6 +1,0 @@
-{
-  // 省略其他
-  "terminal.integrated.env.windows": {
-    "PYTHONPATH": "${workspaceFolder};${env:PYTHONPATH}"
-  }
-}
