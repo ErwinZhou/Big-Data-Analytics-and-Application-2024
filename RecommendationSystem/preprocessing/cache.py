@@ -17,3 +17,4 @@ def load_from_pickle(path):
     except Exception as e:
         print(f"An error occurred while trying to load data from {path}: {e}")
         return False
+    
