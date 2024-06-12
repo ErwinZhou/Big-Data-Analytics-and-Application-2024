@@ -8,7 +8,7 @@ def save_to_pickle(obj, path):
     except Exception as e:
         print(f"An error occurred while trying to save data to {path}: {e}")
         return False
-
+    
 def load_from_pickle(path):
     try:
         with open(path, 'rb') as f:

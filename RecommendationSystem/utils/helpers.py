@@ -20,7 +20,7 @@ def get_user_data(file_path):
                 user_ratings[user_id].append([item, rating])
     return user_ratings
 
-def analyze_data(user_ratings, train_data_stats_path, train_data_ratings_distribution_path):
+def analyze_training_data(user_ratings, train_data_stats_path, train_data_ratings_distribution_path):
     """
     This function serves to analyze the train.txt data
     It focuses on the following aspects:
@@ -48,19 +48,26 @@ def analyze_data(user_ratings, train_data_stats_path, train_data_ratings_distrib
     min_rating = min(all_ratings)
     avg_rating = sum(all_ratings) / total_ratings
     missing_values = sum(1 for rating in all_ratings if rating is None)
-    
+
     max_item_id = max(all_items)
     min_item_id = min(all_items)
     
+    max_user_id = max(user_ratings.keys())
+    min_user_id = min(user_ratings.keys())
+
     rating_series = pd.Series(all_ratings)
     rating_distribution = rating_series.value_counts().sort_index()
+
+    sparseness_ratio = 1 - (total_ratings / (max_user_id * max_item_id))
+
+
     # Save statistics to a text file
     try:
         with open(train_data_stats_path, 'w') as f:
             print(f'Users: ', file=f)
             print(f'   Number of users: {num_users}', file=f)
-            print(f'   Max user id: {max(user_ratings.keys())}', file=f)
-            print(f'   Min user id: {min(user_ratings.keys())}', file=f)
+            print(f'   Max user id: {max_user_id}', file=f)
+            print(f'   Min user id: {min_user_id}', file=f)
             print('\nItems: ', file=f)
             print(f'  Number of rated items: {num_items}', file=f)
             print(f'  Max item id: {max_item_id}', file=f)
@@ -72,6 +79,7 @@ def analyze_data(user_ratings, train_data_stats_path, train_data_ratings_distrib
             print(f'  Min rating: {min_rating}', file=f)
             print(f'  Average rating: {avg_rating:.2f}', file=f)
             print(f'  Missing values (ratings of None): {missing_values}', file=f)
+            print(f'  Sparseness ratio: {sparseness_ratio:.2%}', file=f)
             print('\nRating distribution:', file=f)
             print('\n'.join(f'  {line}' for line in str(rating_distribution).split('\n')), file=f)
         
@@ -102,11 +110,54 @@ def analyze_data(user_ratings, train_data_stats_path, train_data_ratings_distrib
     except IOError:
         return False
 
+def get_test_data(test_data_path):
+    """
+    Load the test data from the file
+    Args:
+        test_data_path: str, the path of the test data file
+    Returns:
+        test_data: dict, the test data
+    """
+    test_data = defaultdict(list)
+    with open(test_data_path, 'r') as file:
+        while (line := file.readline().strip()):
+            user_id, num_ratings = map(int, line.split('|'))
+            for _ in range(num_ratings):
+                item_id = int(file.readline().strip())
+                test_data[user_id].append(item_id)
+    return test_data
+
+def analyze_test_data(test_data, test_data_stats_path, user_ratings, item_raters):
+    """
+    This function serves to analyze the test.txt data
+    To find out the potential setbacks and missing values:
+    - [Users] : Number of users, if there are any new users to avoid cold start
+    - [Items] : Number of items needed to be rated, if there are any new items to avoid cold start
+    """
+    # Get the number of users and items in the test data
+    num_users = len(test_data)
+    num_items = len(set(item for items in test_data.values() for item in items))
+    
+    # Get the number of new users and items in the test data
+    new_users = len(set(test_data.keys()) - set(user_ratings.keys()))
+    new_items = len(set(item for items in test_data.values() for item in items if item not in item_raters))
+    
+    # Save the statistics to a text file
+    with open(test_data_stats_path, 'w') as file:
+        print(f'Users: ', file=file)
+        print(f'   Number of users: {num_users}', file=file)
+        print(f'   Number of new users: {new_users}', file=file)
+        print('\nItems: ', file=file)
+        print(f'  Number of items: {num_items}', file=file)
+        print(f'  Number of new items: {new_items}', file=file)
+
+    return True
+
 def generate_index_map(train_data_path):
     """
     Because the sequence of the items is not continuous
     A index map is needed to map the item id to a continuous index
-    Finally, the index map will be dumped to item_idx.pkl
+    Finally, the index map will be dumped to item_idx.txt and item_idx.pkl
     Args:
         train_data_path: str, the path of the data file
     Returns:
@@ -124,8 +175,12 @@ def generate_index_map(train_data_path):
                     unique_items.add(item)
     sorted_items = sorted(list(unique_items))
     index_map = {value: index for index, value in enumerate(sorted_items)}
+    # Save the index map to a txt file
+    with open('data/cache/txts/item_idx.txt', 'w') as file:
+        for item_id, index in index_map.items():
+            print(f'{item_id} {index}', file=file)
     # Dump the index map to index pickle file
-    if save_to_pickle(index_map, 'data/cache/item_idx.pkl'):
+    if save_to_pickle(index_map, 'data/cache/pkls/item_idx.pkl'):
         return True
     return False
 
@@ -153,8 +208,22 @@ def load_training_data(train_data_path, index_map):
                 user_ratings[user_id].append([index_map[item_id], rating]) 
                 item_raters[index_map[item_id]].append([user_id, rating]) # Only if the item is previously stored in the index map and rated by the users
     
+    # Save the user_ratings and item_raters to txt files
+    with open('data/cache/txts/user_ratings.txt', 'w') as file:
+        for user_id, ratings in user_ratings.items():
+            print(f'{user_id} {len(ratings)}', file=file)
+            for item_id, rating in ratings:
+                print(f'{item_id} {rating}', file=file)
+
+    with open('data/cache/txts/item_raters.txt', 'w') as file:
+        for item_id, raters in item_raters.items():
+            print(f'{item_id} {len(raters)}', file=file)
+            for user_id, rating in raters:
+                print(f'{user_id} {rating}', file=file)
+    
+
     # Save the user_ratings and item_raters to pikle files
-    if save_to_pickle(user_ratings, 'data/cache/user_ratings.pkl') and save_to_pickle(item_raters, 'data/cache/item_raters.pkl'):
+    if save_to_pickle(user_ratings, 'data/cache/pkls/user_ratings.pkl') and save_to_pickle(item_raters, 'data/cache/pkls/item_raters.pkl'):
         return True
     return False
 
@@ -202,6 +271,6 @@ def load_statistical_data(user_ratings, item_raters):
     b_x -= μ
     b_i -= μ
 
-    if save_to_pickle({'μ': μ, 'b_x': b_x, 'b_i': b_i}, 'data/cache/train_statistics.pkl'):
+    if save_to_pickle({'μ': μ, 'b_x': b_x, 'b_i': b_i}, 'data/cache/pkls/train_statistics.pkl'):
         return True
     return False
