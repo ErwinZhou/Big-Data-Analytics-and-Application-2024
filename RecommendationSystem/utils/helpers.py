@@ -1,5 +1,5 @@
 from preprocessing.cache import save_to_pickle, load_from_pickle
-from utils.config import np, pd, defaultdict, plt, colors
+from utils.config import np, pd, defaultdict, plt, colors, math
 
 
 def get_user_data(file_path):
@@ -274,8 +274,9 @@ def analyze_attribute_data(attribute_data, attribute_stats_path, attribute_distr
         plt.ylabel('Count')
         plt.title('Attribute Distribution')
         
-        plt.xticks(bins[:-1], labels=[f'{(bins[i]+bins[i+1])/2:.1f}' for i in range(len(bins)-1)], rotation=45)
-        
+        labels = [f'{math.ceil((bins[i]+bins[i+1])/2):.1f}' for i in range(len(bins)-1)]
+        plt.xticks(bins[:-1], labels=labels, rotation=45)
+
         plt.legend(loc="lower left", frameon=True)
         plt.tight_layout()
 

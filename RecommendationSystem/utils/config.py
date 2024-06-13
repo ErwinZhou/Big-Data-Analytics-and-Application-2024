@@ -5,6 +5,9 @@ import pandas as pd
 from collections import defaultdict
 import pickle
 import matplotlib.pyplot as plt
+import math
+from scipy.sparse import csr_matrix
+from scipy.sparse.linalg import svds
 
 # Global variables
 item_idx = defaultdict()
