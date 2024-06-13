@@ -1,7 +1,11 @@
 Users: 
    Number of users: 19835
+   Max user id: 19834
+   Min user id: 0
    Number of new users: 0
 
 Items: 
   Number of items: 28242
+  Max item id: 624932
+  Min item id: 29
   Number of new items: 7685

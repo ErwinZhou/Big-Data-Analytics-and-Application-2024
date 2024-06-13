@@ -9,7 +9,7 @@ class CollaborativeFiltering:
     """
     def __init__(self):
         self.bias = None
-        
+        self.similarity = None        
 
     def calc_bias(self):
         """

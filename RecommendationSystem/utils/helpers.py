@@ -16,7 +16,12 @@ def get_user_data(file_path):
         while (line := f.readline().strip()):
             user_id, num_ratings = map(int, line.split('|'))
             for _ in range(num_ratings):
-                item, rating = map(int, f.readline().strip().split())
+                item_rating = f.readline().strip().split()
+                item = int(item_rating[0])
+                try:
+                    rating = int(item_rating[1])
+                except ValueError:
+                    rating = None
                 user_ratings[user_id].append([item, rating])
     return user_ratings
 
@@ -26,7 +31,7 @@ def analyze_training_data(user_ratings, train_data_stats_path, train_data_rating
     It focuses on the following aspects:
     - [Users] Number of users, max user id, min user id
     - [Items] Number of rated items, max item id, min item id
-    - [Ratings] Number of ratings, max rating, min rating, average rating, missing values
+    - [Ratings] Number of ratings, max rating, min rating, average rating, missing values, variance, sparseness ratio
     - [Rating Distribution] Distribution of ratings
     Args:
         user_ratings: dict, the user ratings
@@ -35,18 +40,18 @@ def analyze_training_data(user_ratings, train_data_stats_path, train_data_rating
     Returns:
         True or False
     """
-    all_ratings = [rating for ratings in user_ratings.values() for _, rating in ratings]
-    all_items = [item for ratings in user_ratings.values() for item, _ in ratings]
+    all_ratings = [rating for ratings in user_ratings.values() for _, rating in ratings if rating is not None]
+    all_items = [item for ratings in user_ratings.values() for item, _ in ratings if item is not None]
     
     num_users = len(user_ratings)
     num_items = len(set(all_items))
     total_ratings = len(all_ratings)
+    max_rating = max(all_ratings) if all_ratings else None
+    min_rating = min(all_ratings) if all_ratings else None
+    avg_rating = sum(all_ratings) / total_ratings if all_ratings else None
     
     unique_ratings = len(set(all_ratings))  # Calculate the number of unique rating values
     
-    max_rating = max(all_ratings)
-    min_rating = min(all_ratings)
-    avg_rating = sum(all_ratings) / total_ratings
     missing_values = sum(1 for rating in all_ratings if rating is None)
 
     max_item_id = max(all_items)
@@ -57,7 +62,7 @@ def analyze_training_data(user_ratings, train_data_stats_path, train_data_rating
 
     rating_series = pd.Series(all_ratings)
     rating_distribution = rating_series.value_counts().sort_index()
-
+    variance = rating_series.var() if all_ratings else None
     sparseness_ratio = 1 - (total_ratings / (max_user_id * max_item_id))
 
 
@@ -78,21 +83,22 @@ def analyze_training_data(user_ratings, train_data_stats_path, train_data_rating
             print(f'  Max rating: {max_rating}', file=f)
             print(f'  Min rating: {min_rating}', file=f)
             print(f'  Average rating: {avg_rating:.2f}', file=f)
+            print(f'  Variance: {variance:.2f}', file=f)
             print(f'  Missing values (ratings of None): {missing_values}', file=f)
             print(f'  Sparseness ratio: {sparseness_ratio:.2%}', file=f)
             print('\nRating distribution:', file=f)
             print('\n'.join(f'  {line}' for line in str(rating_distribution).split('\n')), file=f)
         
         # Plot the rating distribution with bins
-        plt.hist(rating_series, bins=10, edgecolor='black', color='grey', alpha=0.5)
+        plt.hist(rating_series, bins=10, edgecolor='black', color='grey', alpha=0.5) if all_ratings else None
         plt.xlabel('Rating')
         plt.ylabel('Count')
         plt.title('Rating Distribution')
         plt.xticks(range(0, 101, 10))
         
         # Calculate the average rating and add a vertical line
-        average_rating = np.mean(rating_series)
-        plt.axvline(x=average_rating, color=colors[0], linestyle='--', label=f'Average Rating: {average_rating:.2f}')
+        average_rating = np.mean(rating_series) if all_ratings else None
+        plt.axvline(x=average_rating, color=colors[0], linestyle='--', label=f'Average Rating: {average_rating:.2f}') if average_rating is not None else None
         
         # Calculate the average count and add a horizontal line
         average_count = np.mean(rating_distribution)
@@ -131,8 +137,8 @@ def analyze_test_data(test_data, test_data_stats_path, user_ratings, item_raters
     """
     This function serves to analyze the test.txt data
     To find out the potential setbacks and missing values:
-    - [Users] : Number of users, if there are any new users to avoid cold start
-    - [Items] : Number of items needed to be rated, if there are any new items to avoid cold start
+    - [Users] : Max(Min) user id, Number of users, if there are any new users to avoid cold start
+    - [Items] : Max(Min) item id, Number of items needed to be rated, if there are any new items to avoid cold start
     Finally, save the statistics to a text file 
     Args:
         test_data: dict, the test data
@@ -149,15 +155,134 @@ def analyze_test_data(test_data, test_data_stats_path, user_ratings, item_raters
     # Get the number of new users and items in the test data
     new_users = len(set(test_data.keys()) - set(user_ratings.keys()))
     new_items = len(set(item for items in test_data.values() for item in items if item not in item_raters))
+
+    # Max(Min) user id and item id in the test data
+    max_user_id = max(test_data.keys())
+    min_user_id = min(test_data.keys())
+    max_item_id = max(item for items in test_data.values() for item in items)
+    min_item_id = min(item for items in test_data.values() for item in items)
+    
     try:
         # Save the statistics to a text file
         with open(test_data_stats_path, 'w') as file:
             print(f'Users: ', file=file)
             print(f'   Number of users: {num_users}', file=file)
+            print(f'   Max user id: {max_user_id}', file=file)
+            print(f'   Min user id: {min_user_id}', file=file)
             print(f'   Number of new users: {new_users}', file=file)
             print('\nItems: ', file=file)
             print(f'  Number of items: {num_items}', file=file)
+            print(f'  Max item id: {max_item_id}', file=file)
+            print(f'  Min item id: {min_item_id}', file=file)
             print(f'  Number of new items: {new_items}', file=file)
+    except IOError:
+        return False
+    return True
+
+def get_attribute_data(attribute_path):
+    """
+    Load the attribute data from the file
+    Args:
+        attribute_path: str, the path of the attribute file
+    Returns:
+        attribute_data: dict, the attribute data
+    """
+    attribute_data = defaultdict(dict)
+    with open(attribute_path, 'r') as file:
+        while (line := file.readline().strip()):
+            item_id, *attributes = line.split('|')
+            item_id = int(item_id)
+            attribute_data[item_id] = {}
+            for i, attribute in enumerate(attributes, start=1):
+                try:
+                    attribute_data[item_id][f'attribute{i}'] = int(attribute)
+                except ValueError:
+                    attribute_data[item_id][f'attribute{i}'] = None
+    return attribute_data
+            
+def analyze_attribute_data(attribute_data, attribute_stats_path, attribute_distribution_path):
+    """
+    This function serves to analyze the itemAttribute.txt data
+    We already know that there are two types of attributes in it
+    It includes the following aspects:
+    - [Attributes] Max and min values of the attributes, Number of None values, ratio of None values, average value of the attributes, variance
+    - [Attribute Distribution] Distribution of the attributes
+    - [Others] If the itemAttribute.txt file includes all the item 
+    Args:
+        attribute_data: dict, the attribute data
+        attribute_stats_path: str, the path of the statistics file
+        attribute_distribution_path: str, the path of the attribute distribution png file
+    Returns:
+        True or False
+    """
+    attribute1_values = [data['attribute1'] for data in attribute_data.values() if data['attribute1'] is not None]
+    attribute2_values = [data['attribute2'] for data in attribute_data.values() if data['attribute2'] is not None]
+    total_values = len(attribute_data) * 2
+    max_attribute1 = max(attribute1_values) if attribute1_values else None
+    min_attribute1 = min(attribute1_values) if attribute1_values else None
+    max_attribute2 = max(attribute2_values) if attribute2_values else None
+    min_attribute2 = min(attribute2_values) if attribute2_values else None
+    
+    num_none_values1 = sum(1 for value in attribute_data.values() if value['attribute1'] is None)
+    num_none_values2 = sum(1 for value in attribute_data.values() if value['attribute2'] is None)
+
+    total_none_values = num_none_values1 + num_none_values2
+
+    none_ratio1 = num_none_values1 / len(attribute_data) * 100
+    none_ratio2 = num_none_values2 / len(attribute_data) * 100
+    total_none_ratio = total_none_values / total_values * 100
+    
+    avg_attribute1 = sum(attribute1_values) / len(attribute1_values) if attribute1_values else None
+    avg_attribute2 = sum(attribute2_values) / len(attribute2_values) if attribute2_values else None
+    var_attribute1 = np.var(attribute1_values) if attribute1_values else None
+    var_attribute2 = np.var(attribute2_values) if attribute2_values else None
+
+    try:
+        with open(attribute_stats_path, 'w') as file:
+            print(f'Attribute 1: ', file=file)
+            print(f'  Max value: {max_attribute1}', file=file)
+            print(f'  Min value: {min_attribute1}', file=file)
+            print(f'  Average value: {avg_attribute1:.2f}', file=file) if avg_attribute1 is not None else print(f'  Average value: None', file=file)
+            print(f'  Variance: {var_attribute1:.2f}', file=file) if var_attribute1 is not None else print(f'  Variance: None', file=file)
+            print(f'  Number of None values: {num_none_values1}', file=file)
+            print(f'  Ratio of None values: {none_ratio1:.2f}%', file=file)  
+            print('\nAttribute 2: ', file=file)
+            print(f'  Max value: {max_attribute2}', file=file)
+            print(f'  Min value: {min_attribute2}', file=file)
+            print(f'  Average value: {avg_attribute2:.2f}', file=file) if avg_attribute2 is not None else print(f'  Average value: None', file=file)
+            print(f'  Variance: {var_attribute2:.2f}', file=file) if var_attribute2 is not None else print(f'  Variance: None', file=file)
+            print(f'  Number of None values: {num_none_values2}', file=file)
+            print(f'  Ratio of None values: {none_ratio2:.2f}%', file=file)  
+            print('\n', file=file)
+            print(f'Total number of None values: {total_none_values}', file=file)
+            print(f'Total ratio of None values: {total_none_ratio:.2f}%', file=file)  
+    
+        bins = np.linspace(min(min(attribute1_values), min(attribute2_values)), 
+                           max(max(attribute1_values), max(attribute2_values)), 11)
+
+        width = (bins[1] - bins[0]) / 2
+
+        plt.figure(figsize=(10, 6))
+        if attribute1_values:
+            plt.hist(attribute1_values, bins=bins, edgecolor='black', color=colors[3], alpha=0.5, label='Attribute 1', align='mid')
+            plt.axvline(avg_attribute1, color=colors[3], linestyle='dashed', linewidth=2, label='Attribute 1 Mean')
+        if attribute2_values:
+            plt.hist(attribute2_values, bins=bins, edgecolor='black', color=colors[0], alpha=0.5, label='Attribute 2', align='mid')
+            plt.axvline(avg_attribute2, color=colors[0], linestyle='dashed', linewidth=2, label='Attribute 2 Mean')
+        
+        plt.xlabel('Attribute Value')
+        plt.ylabel('Count')
+        plt.title('Attribute Distribution')
+        
+        plt.xticks(bins[:-1], labels=[f'{(bins[i]+bins[i+1])/2:.1f}' for i in range(len(bins)-1)], rotation=45)
+        
+        plt.legend(loc="lower left", frameon=True)
+        plt.tight_layout()
+
+
+        plt.savefig(attribute_distribution_path)
+        plt.show()
+
     except IOError:
         return False
     return True
@@ -235,6 +360,31 @@ def load_training_data(train_data_path, index_map):
     if save_to_pickle(user_ratings, 'data/cache/pkls/user_ratings.pkl') and save_to_pickle(item_raters, 'data/cache/pkls/item_raters.pkl'):
         return True
     return False
+
+def split_training_data(user_ratings, validation_ratio=0.2, shuffle=True, random_seed=42):
+    """
+    Split the training data into training and validation sets
+    Because the required result form is listed as [User]{Item1: Rating}{Item2: Rating}...
+    So only to shuffle the user_ratings and split the data into training and validation sets(item_raters is not needed here)
+    Args:
+        user_ratings: dict, the user ratings
+        validation_ratio: float, the ratio of the validation set
+        shuffle: bool, whether to shuffle the data
+        random_seed: int, the random seed
+    Returns:
+        train_data: dict, the training data
+        validation_data: dict, the validation data
+    """
+    if shuffle:
+        np.random.seed(random_seed)
+        for user_id, ratings in user_ratings.items():
+            np.random.shuffle(ratings)
+    train_data, validation_data = {}, {}
+    for user_id, ratings in user_ratings.items():
+        split_index = int(len(ratings) * (1 - validation_ratio))
+        train_data[user_id] = ratings[:split_index]
+        validation_data[user_id] = ratings[split_index:]
+    return train_data, validation_data
 
 def load_attribute_data(attribute_path, index_map):
     """

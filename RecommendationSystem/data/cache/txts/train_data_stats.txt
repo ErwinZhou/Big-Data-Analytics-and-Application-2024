@@ -14,6 +14,7 @@ Ratings:
   Max rating: 100
   Min rating: 0
   Average rating: 49.51
+  Variance: 1460.48
   Missing values (ratings of None): 0
   Sparseness ratio: 99.96%
 
