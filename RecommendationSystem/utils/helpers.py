@@ -133,6 +133,14 @@ def analyze_test_data(test_data, test_data_stats_path, user_ratings, item_raters
     To find out the potential setbacks and missing values:
     - [Users] : Number of users, if there are any new users to avoid cold start
     - [Items] : Number of items needed to be rated, if there are any new items to avoid cold start
+    Finally, save the statistics to a text file 
+    Args:
+        test_data: dict, the test data
+        test_data_stats_path: str, the path of the statistics file
+        user_ratings: dict, the user ratings
+        item_raters: dict, the item raters
+    Returns:
+        True or False
     """
     # Get the number of users and items in the test data
     num_users = len(test_data)
@@ -141,16 +149,17 @@ def analyze_test_data(test_data, test_data_stats_path, user_ratings, item_raters
     # Get the number of new users and items in the test data
     new_users = len(set(test_data.keys()) - set(user_ratings.keys()))
     new_items = len(set(item for items in test_data.values() for item in items if item not in item_raters))
-    
-    # Save the statistics to a text file
-    with open(test_data_stats_path, 'w') as file:
-        print(f'Users: ', file=file)
-        print(f'   Number of users: {num_users}', file=file)
-        print(f'   Number of new users: {new_users}', file=file)
-        print('\nItems: ', file=file)
-        print(f'  Number of items: {num_items}', file=file)
-        print(f'  Number of new items: {new_items}', file=file)
-
+    try:
+        # Save the statistics to a text file
+        with open(test_data_stats_path, 'w') as file:
+            print(f'Users: ', file=file)
+            print(f'   Number of users: {num_users}', file=file)
+            print(f'   Number of new users: {new_users}', file=file)
+            print('\nItems: ', file=file)
+            print(f'  Number of items: {num_items}', file=file)
+            print(f'  Number of new items: {new_items}', file=file)
+    except IOError:
+        return False
     return True
 
 def generate_index_map(train_data_path):
