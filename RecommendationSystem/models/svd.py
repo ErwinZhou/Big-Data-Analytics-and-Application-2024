@@ -1,4 +1,4 @@
-from utils.config import np, pd, coo_matrix, csr_matrix, svds, EM
+from utils.config import np, pd, coo_matrix, csr_matrix, svds, EM, logging, tqdm
 from utils.evaluation import SSE, RMSE
 from preprocessing.cache import load_from_pickle, save_to_pickle
 
@@ -6,7 +6,7 @@ class SVD:
     """
     The class to implement the Singular Value Decomposition algorithm
     """
-    def __init__(self, num_factors=20, learning_rate=0.005, reg_bias=0.02, reg_pq=0.02, epochs=20):
+    def __init__(self, num_factors=100, learning_rate=0.001, reg_bias=0.02, reg_pq=0.02, epochs=20):
         self.num_factors = num_factors  # The dimension of the latent space
         self.learning_rate = learning_rate
         self.reg_bias = reg_bias # Regularization parameter for user and item biases to prevent overfitting
@@ -18,11 +18,16 @@ class SVD:
         self.P = None  # User matrix of the SVD [n_users, num_factors]
         self.Q = None  # Item matrix of the SVD [n_items, num_factors]
 
+        # Set up logging
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+        self.logger = logging.getLogger(__name__)
+
     def fit(self, user_ratings):
         """
         Train the SVD model on the given data.
         :param user_ratings: Dictionary with user as key and a list of (item, rating) tuples as value
         """
+        self.logger.info("Starting training")
         # Transform the user_ratings data into lists for constructing the sparse matrix
         users = []
         items = []
@@ -32,7 +37,7 @@ class SVD:
             for item, rating in ratings_list:
                 users.append(user)
                 items.append(item)
-                ratings.append(rating)
+                ratings.append(float(rating))
 
         # Create the sparse matrix using COO format
         num_users = max(users) + 1
@@ -79,10 +84,14 @@ class SVD:
         """
         Perform stochastic gradient descent to optimize the biases and latent factors.
         """
-        for epoch in range(self.num_epochs):
-            for user, item, rating in zip(users, items, ratings):
+        for epoch in range(self.epochs):
+            self.logger.info(f"Starting epoch {epoch + 1}/{self.epochs}")
+            epoch_errors = []
+
+            for user, item, rating in tqdm(zip(users, items, ratings), total=len(ratings), desc=f"Epoch {epoch + 1}/{self.epochs}"):
                 prediction = self.predict_single(user, item)
                 error = rating - prediction
+                epoch_errors.append(error)
 
                 # Update biases
                 self.b_x[user] += self.learning_rate * (error - self.reg_bias * self.b_x[user])
@@ -91,6 +100,13 @@ class SVD:
                 # Update latent factors
                 self.P[user, :] += self.learning_rate * (error * self.Q[item, :] - self.reg_pq * self.P[user, :])
                 self.Q[item, :] += self.learning_rate * (error * self.P[user, :] - self.reg_pq * self.Q[item, :])
+
+                # Prevent overflow and NaNs
+                self.P[user, :] = np.clip(self.P[user, :], -1e10, 1e10)
+                self.Q[item, :] = np.clip(self.Q[item, :], -1e10, 1e10)
+
+            rmse = np.sqrt(np.mean(np.square(epoch_errors)))
+            self.logger.info(f"Epoch {epoch + 1} completed. RMSE: {rmse:.4f}")
 
     def predict_single(self, user, item):
         """
@@ -115,7 +131,6 @@ class SVD:
             return self.predict_single(user_id, item_id)
         else:
             return self.μ  # If user or item is unknown, return the global mean
-
         
 
 
