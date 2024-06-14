@@ -1,4 +1,4 @@
-from utils.config import np, pd, coo_matrix, csr_matrix, svds, EM, logging, tqdm
+from utils.config import np, pd, coo_matrix, csr_matrix, svds, EM, logging, tqdm, plt
 from utils.evaluation import SSE, RMSE
 from preprocessing.cache import load_from_pickle, save_to_pickle
 
@@ -6,7 +6,7 @@ class SVD:
     """
     The class to implement the Singular Value Decomposition algorithm
     """
-    def __init__(self, num_factors=100, learning_rate=0.001, reg_bias=0.02, reg_pq=0.02, epochs=20):
+    def __init__(self, num_factors=100, learning_rate=0.001, reg_bias=0.02, reg_pq=0.02, epochs=20, method="basis"):
         self.num_factors = num_factors  # The dimension of the latent space
         self.learning_rate = learning_rate
         self.reg_bias = reg_bias # Regularization parameter for user and item biases to prevent overfitting
@@ -17,6 +17,8 @@ class SVD:
         self.b_i = None # Item biases [n_items] Treated as parameters to be learned
         self.P = None  # User matrix of the SVD [n_users, num_factors]
         self.Q = None  # Item matrix of the SVD [n_items, num_factors]
+        self.method = method # The method to extract the latent factors, either 'basis' or 'IncSVD'
+        self.losses = []  # List to store the RMSE for each epoch
 
         # Set up logging
         logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -60,12 +62,13 @@ class SVD:
             self.b_i = np.zeros(num_items)
 
         # Initialize latent factors using SVD
-        self.P, self.Q = self.extract_factors(sparse_matrix, method="basis")
+        self.P, self.Q = self.extract_factors(sparse_matrix, method=self.method)
         
         # Train the model using SGD
         self.sgd(users, items, ratings)
-    
-    def extract_factors(self,sparse_matrix, method = "basis"):
+        self.plot_losses()
+
+    def extract_factors(self, sparse_matrix, method='basis'):
         """
         The function to extract the latent factors from the model using SVD.
         """
@@ -106,8 +109,22 @@ class SVD:
                 self.Q[item, :] = np.clip(self.Q[item, :], -1e10, 1e10)
 
             rmse = np.sqrt(np.mean(np.square(epoch_errors)))
+            self.losses.append(rmse)
             self.logger.info(f"Epoch {epoch + 1} completed. RMSE: {rmse:.4f}")
+    
 
+    def plot_loss(self):
+        """
+        Plot the RMSE loss curve over epochs.
+        """
+        plt.figure(figsize=(10, 6))
+        plt.plot(range(1, self.epochs + 1), self.losses, marker='o', linestyle='-', color='b')
+        plt.title('RMSE over Epochs')
+        plt.xlabel('Epoch')
+        plt.ylabel('RMSE')
+        plt.grid(True)
+        plt.show() 
+       
     def predict_single(self, user, item):
         """
         Predict a single rating.
@@ -138,7 +155,7 @@ if __name__ == "__main__":
 
     user_ratings = load_from_pickle('data/cache/pkls/user_ratings.pkl')
     # Initialize and train the SVD model
-    svd = SVD(num_factors=20, learning_rate=0.005, reg_bias=0.02, reg_pq=0.02, epochs=20)
+    svd = SVD(num_factors=20, learning_rate=0.005, reg_bias=0.02, reg_pq=0.02, epochs=20, method = "IncSVD")
     svd.fit(user_ratings)
     
     # Example prediction
