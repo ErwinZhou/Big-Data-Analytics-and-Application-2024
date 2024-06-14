@@ -1,4 +1,4 @@
-from utils.config import np, pd, coo_matrix, csr_matrix, svds, EM, logging, tqdm, plt
+from utils.config import np, pd, coo_matrix, csr_matrix, svds, EM, logging, tqdm, plt, pickle
 from utils.evaluation import SSE, RMSE
 from preprocessing.cache import load_from_pickle, save_to_pickle
 
@@ -98,12 +98,18 @@ class SVD:
 
                 # Update biases
                 self.b_x[user] += self.learning_rate * (error - self.reg_bias * self.b_x[user])
+                if user == 5 and item == 369927:
+                    print("self.b_x[user]: ", self.b_x[user])
                 self.b_i[item] += self.learning_rate * (error - self.reg_bias * self.b_i[item])
-
+                if user == 5 and item == 369927:
+                    print("self.b_i[item]: ", self.b_i[item])
                 # Update latent factors
                 self.P[user, :] += self.learning_rate * (error * self.Q[item, :] - self.reg_pq * self.P[user, :])
+                if user == 5 and item == 369927:
+                    print("self.P[user, :]: ", self.P[user, :])
                 self.Q[item, :] += self.learning_rate * (error * self.P[user, :] - self.reg_pq * self.Q[item, :])
-
+                if user == 5 and item == 369927:
+                    print("self.Q[item, :]: ", self.Q[item, :])
                 # Prevent overflow and NaNs
                 self.P[user, :] = np.clip(self.P[user, :], -1e10, 1e10)
                 self.Q[item, :] = np.clip(self.Q[item, :], -1e10, 1e10)
@@ -113,7 +119,7 @@ class SVD:
             self.logger.info(f"Epoch {epoch + 1} completed. RMSE: {rmse:.4f}")
     
 
-    def plot_loss(self):
+    def plot_losses(self):
         """
         Plot the RMSE loss curve over epochs.
         """
@@ -133,7 +139,10 @@ class SVD:
         :param item: int, the item ID
         :return: float, the predicted rating
         """
-        prediction = self.μ + self.b_x[user] + self.b_i[item] + np.dot(self.P[user, :], self.Q[item, :])
+        # prediction = self.μ + self.b_x[user] + self.b_i[item] + np.dot(self.P[user, :], self.Q[item, :])
+        prediction = self.μ + self.b_x[user] + self.b_i[item]
+        if prediction > 100 :
+            prediction = 100
         return prediction
 
     def predict(self, user_id, item_id):
@@ -148,16 +157,39 @@ class SVD:
             return self.predict_single(user_id, item_id)
         else:
             return self.μ  # If user or item is unknown, return the global mean
-        
+    
+    def save_model(self, path):
+        """
+        Save the trained model to a file.
+        :param path: str, the file path to save the model
+        """
+        model_data = {
+            'num_factors': self.num_factors,
+            'learning_rate': self.learning_rate,
+            'reg_bias': self.reg_bias,
+            'reg_pq': self.reg_pq,
+            'epochs': self.epochs,
+            'μ': self.μ,
+            'b_x': self.b_x,
+            'b_i': self.b_i,
+            'P': self.P,
+            'Q': self.Q
+        }
+        with open(path, 'wb') as f:
+            pickle.dump(model_data, f)
+        self.logger.info(f"Model saved to {path}")
 
 
 if __name__ == "__main__":
 
     user_ratings = load_from_pickle('data/cache/pkls/user_ratings.pkl')
     # Initialize and train the SVD model
-    svd = SVD(num_factors=20, learning_rate=0.005, reg_bias=0.02, reg_pq=0.02, epochs=20, method = "IncSVD")
+    svd = SVD(num_factors=20, learning_rate=0.005, reg_bias=0.02, reg_pq=0.02, epochs=15, method = "IncSVD")
     svd.fit(user_ratings)
     
+    # Save the model
+    svd.save_model('data/svd_model.pkl')
+
     # Example prediction
     user_id = 0
     item_id = 378216

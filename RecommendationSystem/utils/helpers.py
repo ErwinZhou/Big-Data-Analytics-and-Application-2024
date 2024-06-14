@@ -337,11 +337,11 @@ def load_training_data(train_data_path, index_map):
             for _ in range(num_ratings):
                 line = file.readline().strip()
                 item_id, rating = map(int, line.split())
-                # normalized_rating = rating / 10.0 
-                # user_data[user_id].append([index_map[item_id], normalized_rating])
-                # item_data[index_map[item_id]].append([user_id, normalized_rating])
-                user_ratings[user_id].append([index_map[item_id], rating]) 
-                item_raters[index_map[item_id]].append([user_id, rating]) # Only if the item is previously stored in the index map and rated by the users
+                normalized_rating = rating / 10.0 
+                user_ratings[user_id].append([index_map[item_id], normalized_rating])
+                item_raters[index_map[item_id]].append([user_id, normalized_rating])
+                # user_ratings[user_id].append([index_map[item_id], rating]) 
+                # item_raters[index_map[item_id]].append([user_id, rating]) # Only if the item is previously stored in the index map and rated by the users
     
     # Save the user_ratings and item_raters to txt files
     with open('data/cache/txts/user_ratings.txt', 'w') as file:
