@@ -1,7 +1,6 @@
-from utils.config import np, pd, csr_matrix, svds
+from utils.config import np, pd, coo_matrix, csr_matrix, svds, EM
 from utils.evaluation import SSE, RMSE
 from preprocessing.cache import load_from_pickle, save_to_pickle
-import IncSVD.EvolvingMatrix as EM
 
 class SVD:
     """
@@ -19,36 +18,48 @@ class SVD:
         self.P = None  # User matrix of the SVD [n_users, num_factors]
         self.Q = None  # Item matrix of the SVD [n_items, num_factors]
 
-    def fit(self, train_data):
+    def fit(self, user_ratings):
         """
         Train the SVD model on the given data.
-        
-        :param train_data: Pandas DataFrame with columns ['user', 'item', 'rating']
+        :param user_ratings: Dictionary with user as key and a list of (item, rating) tuples as value
         """
-        # Create user-item matrix
-        user_item_matrix = train_data.pivot(index='user', columns='item', values='rating').fillna(0)
-        sparse_matrix = csr_matrix(user_item_matrix)
-        
-        # load the statistics data
+        # Transform the user_ratings data into lists for constructing the sparse matrix
+        users = []
+        items = []
+        ratings = []
+
+        for user, ratings_list in user_ratings.items():
+            for item, rating in ratings_list:
+                users.append(user)
+                items.append(item)
+                ratings.append(rating)
+
+        # Create the sparse matrix using COO format
+        num_users = max(users) + 1
+        num_items = max(items) + 1
+        coo = coo_matrix((ratings, (users, items)), shape=(num_users, num_items))
+        sparse_matrix = coo.tocsr()  # Convert to CSR format
+
+        # Load the statistics data
         stats_data = load_from_pickle('data/cache/pkls/train_statistics.pkl')
         self.μ = stats_data['μ']
         self.b_x = stats_data['b_x']
         self.b_i = stats_data['b_i']
-        
+
         # If μ, b_x, or b_i are not provided, initialize them
         if self.μ is None:
-            self.μ = train_data['rating'].mean()
+            self.μ = np.mean(ratings)
         if self.b_x is None:
-            self.b_x = np.zeros(user_item_matrix.shape[0])
+            self.b_x = np.zeros(num_users)
         if self.b_i is None:
-            self.b_i = np.zeros(user_item_matrix.shape[1])
+            self.b_i = np.zeros(num_items)
 
         # Initialize latent factors using SVD
         self.P, self.Q = self.extract_factors(sparse_matrix, method="basis")
-
+        
         # Train the model using SGD
-        self.sgd(train_data)
-
+        self.sgd(users, items, ratings)
+    
     def extract_factors(self,sparse_matrix, method = "basis"):
         """
         The function to extract the latent factors from the model using SVD.
@@ -64,16 +75,12 @@ class SVD:
             Q = Vk
         return P, Q
 
-    def sgd(self, train_data):
+    def sgd(self, users, items, ratings):
         """
         Perform stochastic gradient descent to optimize the biases and latent factors.
         """
-        for _ in range(self.epochs):
-            for row in train_data.itertuples():
-                user = row.user
-                item = row.item
-                rating = row.rating
-
+        for epoch in range(self.num_epochs):
+            for user, item, rating in zip(users, items, ratings):
                 prediction = self.predict_single(user, item)
                 error = rating - prediction
 
@@ -104,35 +111,23 @@ class SVD:
         :param item_id: int, the item ID
         :return: float, the predicted rating
         """
-        if user_id in self.b_x.index and item_id in self.b_i.index:
+        if user_id in range(len(self.b_x)) and item_id in range(len(self.b_i)):
             return self.predict_single(user_id, item_id)
         else:
             return self.μ  # If user or item is unknown, return the global mean
 
-    def calc_bias(self):
-        """
-        The function to calculate the bias for the items.
-        Without the factorization, the bias is calculated as:
-        b_i = μ + b_x + b_i
-        """
-        stat_data = self.load_from_pickle('data/cache/pkls/train_statistics.pkl')
-        self.μ = stat_data['μ']
-        self.b_x = stat_data['b_x']
-        self.b_i = stat_data['b_i']
         
 
 
-# if __name__ == "__main__":
-#     # Load training data
-#     train_path = 'data/processed_train.csv'
-#     train_df = pd.read_csv(train_path)
+if __name__ == "__main__":
+
+    user_ratings = load_from_pickle('data/cache/pkls/user_ratings.pkl')
+    # Initialize and train the SVD model
+    svd = SVD(num_factors=20, learning_rate=0.005, reg_bias=0.02, reg_pq=0.02, epochs=20)
+    svd.fit(user_ratings)
     
-#     # Initialize and train the SVD model
-#     svd = SVD(num_factors=20, learning_rate=0.005, reg_bias=0.02, reg_pq=0.02, epochs=20)
-#     svd.fit(train_df)
-    
-#     # Example prediction
-#     user_id = 0
-#     item_id = 378216
-#     rating = svd.predict(user_id, item_id)
-#     print(f'Predicted rating for user {user_id} and item {item_id}: {rating}')
+    # Example prediction
+    user_id = 0
+    item_id = 378216
+    rating = svd.predict(user_id, item_id)
+    print(f'Predicted rating for user {user_id} and item {item_id}: {rating}')
