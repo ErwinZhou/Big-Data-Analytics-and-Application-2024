@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
     
     # Initialize and train the SVD model
-    svd = SVD(num_factors=20)
+    svd = SVD(num_factors=100)
     
     # Example prediction
     user_id = 0

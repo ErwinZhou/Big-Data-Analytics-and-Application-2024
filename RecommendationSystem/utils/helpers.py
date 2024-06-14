@@ -1,6 +1,11 @@
 from preprocessing.cache import save_to_pickle, load_from_pickle
 from utils.config import np, pd, defaultdict, plt, colors, math
 
+def log_normalization(rating):
+    return np.log1p(rating)  # log(1 + rating)
+
+def min_max_normalization(rating, min_rating, max_rating, new_min=1, new_max=10):
+    return (rating - min_rating) / (max_rating - min_rating) * (new_max - new_min) + new_min
 
 def get_user_data(file_path):
     """
@@ -33,6 +38,7 @@ def analyze_training_data(user_ratings, train_data_stats_path, train_data_rating
     - [Items] Number of rated items, max item id, min item id
     - [Ratings] Number of ratings, max rating, min rating, average rating, missing values, variance, sparseness ratio
     - [Rating Distribution] Distribution of ratings
+    - [Others] (1) Is there some users never rated any items? 
     Args:
         user_ratings: dict, the user ratings
         train_data_stats_path: str, the path of the statistics file
@@ -65,6 +71,8 @@ def analyze_training_data(user_ratings, train_data_stats_path, train_data_rating
     variance = rating_series.var() if all_ratings else None
     sparseness_ratio = 1 - (total_ratings / (max_user_id * max_item_id))
 
+    # Is there some users never rated any items?
+    users_never_rated = [user_id for user_id, ratings in user_ratings.items() if not ratings]
 
     # Save statistics to a text file
     try:
@@ -88,6 +96,8 @@ def analyze_training_data(user_ratings, train_data_stats_path, train_data_rating
             print(f'  Sparseness ratio: {sparseness_ratio:.2%}', file=f)
             print('\nRating distribution:', file=f)
             print('\n'.join(f'  {line}' for line in str(rating_distribution).split('\n')), file=f)
+            print('\nOthers: ', file=f)
+            print(f'  Users never rated any items: {users_never_rated}', file=f)
         
         # Plot the rating distribution with bins
         plt.hist(rating_series, bins=10, edgecolor='black', color='grey', alpha=0.5) if all_ratings else None
@@ -207,7 +217,9 @@ def analyze_attribute_data(attribute_data, attribute_stats_path, attribute_distr
     It includes the following aspects:
     - [Attributes] Max and min values of the attributes, Number of None values, ratio of None values, average value of the attributes, variance
     - [Attribute Distribution] Distribution of the attributes
-    - [Others] If the itemAttribute.txt file includes all the item 
+    - [Others] (1)If the itemAttribute.txt file includes all the item 
+               (2)The range of items in the itemAttribute.txt file
+               (3)If the items are continuous
     Args:
         attribute_data: dict, the attribute data
         attribute_stats_path: str, the path of the statistics file
@@ -237,6 +249,14 @@ def analyze_attribute_data(attribute_data, attribute_stats_path, attribute_distr
     var_attribute1 = np.var(attribute1_values) if attribute1_values else None
     var_attribute2 = np.var(attribute2_values) if attribute2_values else None
 
+    # (2)The range of items in the itemAttribute.txt file
+    max_item_id = max(attribute_data.keys())
+    min_item_id = min(attribute_data.keys())
+    # (3)If the items are continuous
+    continuous = False
+    if len(attribute_data) == max_item_id - min_item_id + 1:
+        continuous = True
+
     try:
         with open(attribute_stats_path, 'w') as file:
             print(f'Attribute 1: ', file=file)
@@ -256,7 +276,10 @@ def analyze_attribute_data(attribute_data, attribute_stats_path, attribute_distr
             print('\n', file=file)
             print(f'Total number of None values: {total_none_values}', file=file)
             print(f'Total ratio of None values: {total_none_ratio:.2f}%', file=file)  
-    
+            print('\nOthers: ', file=file)
+            print(f'  The range of items in the itemAttribute.txt file: {min_item_id} - {max_item_id}', file=file)
+            print(f'  If the items are continuous: {continuous}', file=file)
+
         bins = np.linspace(min(min(attribute1_values), min(attribute2_values)), 
                            max(max(attribute1_values), max(attribute2_values)), 11)
 
@@ -331,17 +354,32 @@ def load_training_data(train_data_path, index_map):
         True or False 
     """
     user_ratings, item_raters = defaultdict(list), defaultdict(list)
+    
+    log_ratings = []
+    # First pass to apply log transformation and collect all log ratings
     with open(train_data_path, 'r') as file:
         while (line := file.readline().strip()):
             user_id, num_ratings = map(int, line.split('|'))
             for _ in range(num_ratings):
                 line = file.readline().strip()
                 item_id, rating = map(int, line.split())
-                normalized_rating = rating / 10.0 
+                log_rating = log_normalization(rating)
+                log_ratings.append(log_rating)
+
+    min_log_rating = np.min(log_ratings)
+    max_log_rating = np.max(log_ratings)
+    
+    # Second pass to normalize log ratings to the desired range
+    with open(train_data_path, 'r') as file:
+        while (line := file.readline().strip()):
+            user_id, num_ratings = map(int, line.split('|'))
+            for _ in range(num_ratings):
+                line = file.readline().strip()
+                item_id, rating = map(int, line.split())
+                log_rating = log_normalization(rating)
+                normalized_rating = min_max_normalization(log_rating, min_log_rating, max_log_rating, 0, 10)
                 user_ratings[user_id].append([index_map[item_id], normalized_rating])
                 item_raters[index_map[item_id]].append([user_id, normalized_rating])
-                # user_ratings[user_id].append([index_map[item_id], rating]) 
-                # item_raters[index_map[item_id]].append([user_id, rating]) # Only if the item is previously stored in the index map and rated by the users
     
     # Save the user_ratings and item_raters to txt files
     with open('data/cache/txts/user_ratings.txt', 'w') as file:
@@ -355,7 +393,6 @@ def load_training_data(train_data_path, index_map):
             print(f'{item_id} {len(raters)}', file=file)
             for user_id, rating in raters:
                 print(f'{user_id} {rating}', file=file)
-    
 
     # Save the user_ratings and item_raters to pikle files
     if save_to_pickle(user_ratings, 'data/cache/pkls/user_ratings.pkl') and save_to_pickle(item_raters, 'data/cache/pkls/item_raters.pkl'):

@@ -1,6 +1,7 @@
 from utils.config import np, pd, coo_matrix, csr_matrix, svds, EM, logging, tqdm, plt, pickle
 from utils.evaluation import SSE, RMSE
 from preprocessing.cache import load_from_pickle, save_to_pickle
+from utils.config import losses_png_path, models_path
 
 class SVD:
     """
@@ -9,15 +10,15 @@ class SVD:
     def __init__(self, num_factors=100, learning_rate=0.001, reg_bias=0.02, reg_pq=0.02, epochs=20, method="basis"):
         self.num_factors = num_factors  # The dimension of the latent space
         self.learning_rate = learning_rate
-        self.reg_bias = reg_bias # Regularization parameter for user and item biases to prevent overfitting
-        self.reg_pq = reg_pq # Regularization parameter for user and item latent factors to prevent overfitting
+        self.reg_bias = reg_bias  # Regularization parameter for user and item biases to prevent overfitting
+        self.reg_pq = reg_pq  # Regularization parameter for user and item latent factors to prevent overfitting
         self.epochs = epochs
         self.μ = None  # The global mean of the ratings
-        self.b_x = None # User biases [n_users] Treated as parameters to be learned
-        self.b_i = None # Item biases [n_items] Treated as parameters to be learned
+        self.b_x = None  # User biases [n_users] Treated as parameters to be learned
+        self.b_i = None  # Item biases [n_items] Treated as parameters to be learned
         self.P = None  # User matrix of the SVD [n_users, num_factors]
         self.Q = None  # Item matrix of the SVD [n_items, num_factors]
-        self.method = method # The method to extract the latent factors, either 'basis' or 'IncSVD'
+        self.method = method  # The method to extract the latent factors, either 'basis' or 'IncSVD'
         self.losses = []  # List to store the RMSE for each epoch
 
         # Set up logging
@@ -97,27 +98,28 @@ class SVD:
                 epoch_errors.append(error)
 
                 # Update biases
-                self.b_x[user] += self.learning_rate * (error - self.reg_bias * self.b_x[user])
-                if user == 5 and item == 369927:
-                    print("self.b_x[user]: ", self.b_x[user])
-                self.b_i[item] += self.learning_rate * (error - self.reg_bias * self.b_i[item])
-                if user == 5 and item == 369927:
-                    print("self.b_i[item]: ", self.b_i[item])
+                b_x_grad = self.learning_rate * (error - self.reg_bias * self.b_x[user])
+                b_i_grad = self.learning_rate * (error - self.reg_bias * self.b_i[item])
+
                 # Update latent factors
-                self.P[user, :] += self.learning_rate * (error * self.Q[item, :] - self.reg_pq * self.P[user, :])
-                if user == 5 and item == 369927:
-                    print("self.P[user, :]: ", self.P[user, :])
-                self.Q[item, :] += self.learning_rate * (error * self.P[user, :] - self.reg_pq * self.Q[item, :])
-                if user == 5 and item == 369927:
-                    print("self.Q[item, :]: ", self.Q[item, :])
-                # Prevent overflow and NaNs
-                self.P[user, :] = np.clip(self.P[user, :], -1e10, 1e10)
-                self.Q[item, :] = np.clip(self.Q[item, :], -1e10, 1e10)
+                P_grad = self.learning_rate * (error * self.Q[item, :] - self.reg_pq * self.P[user, :])
+                Q_grad = self.learning_rate * (error * self.P[user, :] - self.reg_pq * self.Q[item, :])
+
+                # Clip gradients
+                b_x_grad = np.clip(b_x_grad, -1.0, 1.0)
+                b_i_grad = np.clip(b_i_grad, -1.0, 1.0)
+                P_grad = np.clip(P_grad, -1.0, 1.0)
+                Q_grad = np.clip(Q_grad, -1.0, 1.0)
+
+                # Apply gradients
+                self.b_x[user] += b_x_grad
+                self.b_i[item] += b_i_grad
+                self.P[user, :] += P_grad
+                self.Q[item, :] += Q_grad
 
             rmse = np.sqrt(np.mean(np.square(epoch_errors)))
             self.losses.append(rmse)
             self.logger.info(f"Epoch {epoch + 1} completed. RMSE: {rmse:.4f}")
-    
 
     def plot_losses(self):
         """
@@ -129,7 +131,8 @@ class SVD:
         plt.xlabel('Epoch')
         plt.ylabel('RMSE')
         plt.grid(True)
-        plt.show() 
+        plt.savefig(f'{losses_png_path}_{self.num_factors}_{self.learning_rate}_{self.reg_bias}_{self.reg_pq}_{self.epochs}_{self.method}.png')
+        plt.show()
        
     def predict_single(self, user, item):
         """
@@ -139,10 +142,12 @@ class SVD:
         :param item: int, the item ID
         :return: float, the predicted rating
         """
-        # prediction = self.μ + self.b_x[user] + self.b_i[item] + np.dot(self.P[user, :], self.Q[item, :])
-        prediction = self.μ + self.b_x[user] + self.b_i[item]
-        if prediction > 100 :
-            prediction = 100
+        prediction = self.μ + self.b_x[user] + self.b_i[item] + np.dot(self.P[user, :], self.Q[item, :])
+        # prediction = self.μ + self.b_x[user] + self.b_i[item]
+        if prediction > 10:
+            prediction = 10
+        elif prediction < 0:
+            prediction = 0
         return prediction
 
     def predict(self, user_id, item_id):
@@ -178,17 +183,45 @@ class SVD:
         with open(path, 'wb') as f:
             pickle.dump(model_data, f)
         self.logger.info(f"Model saved to {path}")
+    
+    def load_model(self, path):
+        """
+        Load the trained model from a file.
+        :param path: str, the file path to load the model
+        """
+        with open(path, 'rb') as f:
+            model_data = pickle.load(f)
+        self.num_factors = model_data['num_factors']
+        self.learning_rate = model_data['learning_rate']
+        self.reg_bias = model_data['reg_bias']
+        self.reg_pq = model_data['reg_pq']
+        self.epochs = model_data['epochs']
+        self.μ = model_data['μ']
+        self.b_x = model_data['b_x']
+        self.b_i = model_data['b_i']
+        self.P = model_data['P']
+        self.Q = model_data['Q']
+        self.logger.info(f"Model loaded from {path}")
+
 
 
 if __name__ == "__main__":
 
     user_ratings = load_from_pickle('data/cache/pkls/user_ratings.pkl')
     # Initialize and train the SVD model
-    svd = SVD(num_factors=20, learning_rate=0.005, reg_bias=0.02, reg_pq=0.02, epochs=15, method = "IncSVD")
+    num_factors = 20
+    learning_rate = 0.005
+    reg_bias = 0.02
+    reg_pq = 0.02
+    epochs = 1
+    method = "basis"
+    svd = SVD(num_factors=num_factors, learning_rate=learning_rate, reg_bias=reg_bias, reg_pq=reg_pq, epochs=epochs, method = method)
     svd.fit(user_ratings)
-    
-    # Save the model
-    svd.save_model('data/svd_model.pkl')
+
+    # Save the model on name includes all the hyperparameters
+    model_name = f'{models_path}_{num_factors}_{learning_rate}_{reg_bias}_{reg_pq}_{epochs}_{method}.pkl'
+
+    svd.save_model(model_name)
 
     # Example prediction
     user_id = 0

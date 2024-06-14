@@ -13,15 +13,15 @@ if __name__ == '__main__' :
     # analyze_training_data(user_ratings, train_data_stats_path, train_data_ratings_distribution_path)
     # print("[INFO] Train data analysis completed.")
     # print('--------------------------------------------------------')
-    # # print('----------------- Preprocessing Train Data -----------------')
-    # # # Create the index map for the items
-    # # print("Creating the index map for the items...")
-    # # generate_index_map(train_data_path)
-    # # # Load the index map
-    # # item_idx = load_from_pickle('data/cache/pkls/item_idx.pkl')
-    # # # Get the item and user data
-    # # print("Getting the item and user data...")
-    # # load_training_data(train_data_path, item_idx)
+    # print('----------------- Preprocessing Train Data -----------------')
+    # # Create the index map for the items
+    # print("Creating the index map for the items...")
+    # generate_index_map(train_data_path)
+    # # Load the index map
+    # item_idx = load_from_pickle('data/cache/pkls/item_idx.pkl')
+    # # Get the item and user data
+    # print("Getting the item and user data...")
+    # load_training_data(train_data_path, item_idx)
     user_ratings = load_from_pickle('data/cache/pkls/user_ratings.pkl')
     item_raters = load_from_pickle('data/cache/pkls/item_raters.pkl')
     
@@ -33,10 +33,10 @@ if __name__ == '__main__' :
     # analyze_test_data(test_data, test_data_stats_path, user_ratings, item_raters)
     # print("[INFO] Test data analysis completed.")
     # print('----------------- Analyzing Attributes Data -----------------')
-    # attributes_data = get_attribute_data(attributes_path)
-    # analyze_attribute_data(attributes_data, attributes_stats_path, attributes_distribution_path)
-    # print("[INFO] Attributes data analysis completed.")
-    # print('--------------------------------------------------------')
+    attributes_data = get_attribute_data(attributes_path)
+    analyze_attribute_data(attributes_data, attributes_stats_path, attributes_distribution_path)
+    print("[INFO] Attributes data analysis completed.")
+    print('--------------------------------------------------------')
     load_statistical_data(user_ratings, item_raters)
     stat_data = load_from_pickle('data/cache/pkls/train_statistics.pkl')
     μ = stat_data['μ']

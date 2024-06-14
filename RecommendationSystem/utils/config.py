@@ -37,3 +37,5 @@ train_data_ratings_distribution_path = 'data/cache/pics/train_data_ratings_distr
 test_data_stats_path = 'data/cache/txts/test_data_stats.txt'
 attributes_stats_path = 'data/cache/txts/attributes_stats.txt'
 attributes_distribution_path = 'data/cache/pics/attributes_distribution.png'
+models_path = 'data/cache/pkls/model'
+losses_png_path = 'data/cache/pics/losses'
