@@ -1,6 +1,7 @@
 from utils.config import np, pd, csr_matrix, svds
 from utils.evaluation import SSE, RMSE
 from preprocessing.cache import load_from_pickle, save_to_pickle
+import IncSVD.EvolvingMatrix as EM
 
 class SVD:
     """
@@ -43,12 +44,25 @@ class SVD:
             self.b_i = np.zeros(user_item_matrix.shape[1])
 
         # Initialize latent factors using SVD
-        u, s, vt = svds(sparse_matrix, k=self.num_factors)
-        self.P = u @ np.diag(s)
-        self.Q = vt.T
+        self.P, self.Q = self.extract_factors(sparse_matrix, method="basis")
 
         # Train the model using SGD
         self.sgd(train_data)
+
+    def extract_factors(self,sparse_matrix, method = "basis"):
+        """
+        The function to extract the latent factors from the model using SVD.
+        """
+        if method == 'basis':
+            u, s, vt = svds(sparse_matrix, k=self.num_factors)
+            P = u @ np.diag(s)
+            Q = vt.T
+        elif method == 'IncSVD':
+            M = EM.EvolvingMatrix(sparse_matrix, k=self.num_factors, sparse=True, method="ZhaSimon")
+            Uk, Sigmak, Vk = M.Uk, M.Sigmak, M.Vk
+            P = Uk @ np.diag(Sigmak)
+            Q = Vk
+        return P, Q
 
     def sgd(self, train_data):
         """
