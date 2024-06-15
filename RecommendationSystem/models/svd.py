@@ -140,10 +140,6 @@ class SVD:
         save_to_pickle(errors, current_evaluation_path)
         return rmse
         
-
-
-        
-
     def sgd(self, users, items, ratings):
         """
         Perform stochastic gradient descent to optimize the biases and latent factors.
@@ -394,8 +390,8 @@ if __name__ == "__main__":
     reg_pq = 0.02
     reg_weight = 0.02
     epochs = 1
-    train_ratio = 0.8
-    shuffle = True
+    train_ratio = 1.0
+    shuffle = False
     svd_method = "basis"
     training_method = "AttributesSVD++"
 
@@ -407,7 +403,8 @@ if __name__ == "__main__":
     # Add the item attributes to the model
     svd.split_data(user_ratings)
     svd.fit(user_ratings)
-    svd.evaluate()
+    rmse = svd.evaluate()
+    print(f'RMSE on evaluation set: {rmse}')
 
     # Save the model on name includes all the hyperparameters
     model_name = f'{models_path}_{num_factors}_{learning_rate}_{reg_bias}_{reg_pq}_{reg_weight}_{epochs}_{train_ratio}_{shuffle}_{svd_method}_{training_method}.pkl'
@@ -480,10 +477,10 @@ if __name__ == "__main__":
 
 
 
-    svd = SVD(training_method='AttributesSVD++')
-    svd.split_data(user_ratings)
-    svd.load_model('data\cache\pkls\model_100_0.005_0.02_0.02_0.02_1_0.8_True_basis_AttributesSVD++.pkl')
+    # svd = SVD(training_method='AttributesSVD++')
+    # svd.split_data(user_ratings)
+    # svd.load_model('data\cache\pkls\model_100_0.005_0.02_0.02_0.02_1_0.8_True_basis_AttributesSVD++.pkl')
 
-    # Evaluate the model
-    rmse = svd.evaluate()
-    print(f'RMSE on evaluation set: {rmse}')
+    # # Evaluate the model
+    # rmse = svd.evaluate()
+    # print(f'RMSE on evaluation set: {rmse}')
