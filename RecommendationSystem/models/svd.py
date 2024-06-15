@@ -1,13 +1,13 @@
 from utils.config import np, pd, coo_matrix, csr_matrix, svds, EM, logging, tqdm, plt, pickle
 from utils.evaluation import SSE, RMSE
 from preprocessing.cache import load_from_pickle, save_to_pickle
-from utils.config import losses_png_path, models_path, processed_attributes_path
+from utils.config import losses_png_path, models_path, processed_attributes_path, evaluation_path
 
 class SVD:
     """
     The class to implement the Singular Value Decomposition algorithm
     """
-    def __init__(self, num_factors=100, learning_rate=0.001, reg_bias=0.02, reg_pq=0.02, reg_weight=0.02, epochs=20, svd_method="basis", training_method="basis"):
+    def __init__(self, num_factors=100, learning_rate=0.001, reg_bias=0.02, reg_pq=0.02, reg_weight=0.02, epochs=20, train_ratio = 0.8, shuffle = True, svd_method="basis", training_method="basis"):
         self.num_factors = num_factors  # The dimension of the latent space
         self.learning_rate = learning_rate
         self.reg_bias = reg_bias  # Regularization parameter for user and item biases to prevent overfitting
@@ -19,12 +19,17 @@ class SVD:
         self.b_i = None  # Item biases [n_items] Treated as parameters to be learned
         self.P = None  # User matrix of the SVD [n_users, num_factors]
         self.Q = None  # Item matrix of the SVD [n_items, num_factors]
+        self.shuffle = shuffle  # Whether to shuffle the ratings of each user
+        self.train_ratio = train_ratio  # The ratio of the training set
         self.svd_method = svd_method  # The method to extract the latent factors, either 'basis' or 'IncSVD'
         self.training_method = training_method  # The method to train the model, 'basis' or 'SVD++' or 'AttributesSVD++'
         self.losses = []  # List to store the RMSE for each epoch
         self.item_attribute1 = None
         self.item_attribute2 = None
         self.attribute_weight = None
+
+        self.train_set = None
+        self.eval_set = None
 
         # Set up logging
         logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -41,7 +46,7 @@ class SVD:
         items = []
         ratings = []
         
-        for user, ratings_list in user_ratings.items():
+        for user, ratings_list in self.train_set.items():
             for item, rating in ratings_list:
                 users.append(user)
                 items.append(item)
@@ -91,6 +96,53 @@ class SVD:
             P = Uk @ np.diag(Sigmak)
             Q = Vk
         return P, Q
+    
+    def split_data(self, user_ratings):
+        """
+        Split the data into training and evaluation sets.
+        Shuffle the ratings of each user and split them into self.train_ratio and 1 - self.train_ratio.
+        """
+        train_set = {}
+        eval_set = {}
+        for user, ratings in user_ratings.items():
+            if self.shuffle:
+                np.random.shuffle(ratings)
+            split_idx = int(len(ratings) * self.train_ratio)
+            train_set[user] = ratings[:split_idx]
+            eval_set[user] = ratings[split_idx:]
+        
+        # Split the data into training and evaluation sets
+        self.train_set, self.eval_set = train_set, eval_set
+        
+    
+
+    def evaluate(self):
+        """
+        Evaluate the model on the given data.
+        """
+        self.logger.info("Starting evaluation")
+        errors = []
+        for user, ratings_list in self.eval_set.items():
+            for item, true_rating in ratings_list:
+                predicted_rating = self.predict(user, item)
+                error = true_rating - predicted_rating
+                errors.append(error)
+        rmse = np.sqrt(np.mean(np.square(errors)))
+        self.logger.info(f"Evaluation completed. RMSE: {rmse:.4f}")
+
+        current_evaluation_path = evaluation_path + '_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.txt'.format(self.num_factors, self.learning_rate, self.reg_bias, self.reg_pq, self.reg_weight, self.epochs, self.train_ratio, self.shuffle, self.svd_method, self.training_method, rmse)
+        # Save the evaluation results to a txt and pickle file
+        with open(current_evaluation_path, 'w') as f:
+            f.write(f"RMSE: {rmse:.4f}")
+        
+        current_evaluation_path.replace('txts', 'pkls')
+        current_evaluation_path.replace('.txt', '.pkl')
+        save_to_pickle(errors, current_evaluation_path)
+        return rmse
+        
+
+
+        
 
     def sgd(self, users, items, ratings):
         """
@@ -258,7 +310,7 @@ class SVD:
             'attribute_weight': self.attribute_weight,
         }
 
-        print(model_data)
+        # print(model_data)
 
         # Save to pickle file
         with open(path, 'wb') as f:
@@ -277,8 +329,8 @@ class SVD:
             f.write(f"Regularization parameter for attribute weights: {self.reg_weight}\n")
             f.write(f"Epochs: {self.epochs}\n")
             f.write(f"Global mean: {self.μ}\n")
-            f.write(f"Number of users: {len(self.b_x)}\n")
-            f.write(f"Number of items: {len(self.b_i)}\n")
+            f.write(f"User biases: {self.b_x}\n")
+            f.write(f"Item biases: {self.b_i}\n")
             f.write(f"Latent Matrix P: {self.P}\n")
             f.write(f"Latent Matrix Q: {self.Q}\n")
             f.write(f"Attribute weight: {self.attribute_weight}\n")
@@ -308,6 +360,7 @@ class SVD:
         Load the trained model from a file.
         :param path: str, the file path to load the model
         """
+        
         with open(path, 'rb') as f:
             model_data = pickle.load(f)
         if self.training_method == 'Basis' or self.training_method == 'SVD++' or self.training_method == 'AttributesSVD++':    
@@ -325,6 +378,7 @@ class SVD:
         if self.training_method == 'AttributesSVD++':
             self.reg_weight = model_data['reg_weight']
             self.attribute_weight = model_data['attribute_weight']
+            self.item_attribute1, self.item_attribute2 = self.load_item_attributes(processed_attributes_path)
 
         self.logger.info(f"Model loaded from {path}")
 
@@ -334,29 +388,36 @@ if __name__ == "__main__":
 
     user_ratings = load_from_pickle('data/cache/pkls/user_ratings.pkl')
     # Initialize and train the SVD model
-    # num_factors = 20
-    # learning_rate = 0.005
-    # reg_bias = 0.02
-    # reg_pq = 0.02
-    # reg_weight = 0.02
-    # epochs = 10
-    # svd_method = "basis"
-    # training_method = "AttributesSVD++"
+    num_factors = 100
+    learning_rate = 0.005
+    reg_bias = 0.02
+    reg_pq = 0.02
+    reg_weight = 0.02
+    epochs = 1
+    train_ratio = 0.8
+    shuffle = True
+    svd_method = "basis"
+    training_method = "AttributesSVD++"
 
 
-    # svd = SVD(num_factors=num_factors, learning_rate=learning_rate, reg_bias=reg_bias, reg_pq=reg_pq, reg_weight=reg_weight, epochs=epochs, svd_method=svd_method, training_method=training_method)
 
-    # # Add the item attributes to the model
 
-    # svd.fit(user_ratings)
+    svd = SVD(num_factors=num_factors, learning_rate=learning_rate, reg_bias=reg_bias, reg_pq=reg_pq, reg_weight=reg_weight, epochs=epochs, train_ratio=train_ratio, shuffle=shuffle, svd_method=svd_method, training_method=training_method)
 
-    # # Save the model on name includes all the hyperparameters
-    # model_name = f'{models_path}_{num_factors}_{learning_rate}_{reg_bias}_{reg_pq}_{reg_weight}_{epochs}_{svd_method}_{training_method}.pkl'
-    # svd.save_model(model_name)
-    # losses_name = f'{models_path}_{num_factors}_{learning_rate}_{reg_bias}_{reg_pq}_{reg_weight}_{epochs}_{svd_method}_{training_method}_losses.pkl'
-    # svd.save_losses(losses_name)
+    # Add the item attributes to the model
+    svd.split_data(user_ratings)
+    svd.fit(user_ratings)
+    svd.evaluate()
 
-    svd = SVD(training_method='AttributesSVD++')
+    # Save the model on name includes all the hyperparameters
+    model_name = f'{models_path}_{num_factors}_{learning_rate}_{reg_bias}_{reg_pq}_{reg_weight}_{epochs}_{train_ratio}_{shuffle}_{svd_method}_{training_method}.pkl'
+    svd.save_model(model_name)
+    losses_name = f'{models_path}_{num_factors}_{learning_rate}_{reg_bias}_{reg_pq}_{reg_weight}_{epochs}_{train_ratio}_{shuffle}_{svd_method}_{training_method}_losses.pkl'
+    svd.save_losses(losses_name)
+
+
+
+    # svd = SVD(training_method='AttributesSVD++')
     # svd.load_model('data/cache/pkls/model_20_0.005_0.02_0.02_0.02_30_basis_AttributesSVD++.pkl')
     # # print所有参数
     # print(svd.num_factors)
@@ -371,32 +432,58 @@ if __name__ == "__main__":
     # print(svd.P)
     # print(svd.Q)
     # print(svd.attribute_weight)
-    model_data = load_from_pickle('data/cache/pkls/model_20_0.005_0.02_0.02_0.02_30_basis_AttributesSVD++.pkl')
-    print(model_data['num_factors'])
-    print(model_data['learning_rate'])
-    print(model_data['reg_bias'])
-    print(model_data['epochs'])
-    print(model_data['μ'])
-    print(model_data['b_x'])
-    print(model_data['b_i'])
-    print(model_data['P'])
-    print(model_data['Q'])
-    svd = SVD(num_factors=model_data['num_factors'], 
-              learning_rate=model_data['learning_rate'], 
-              reg_bias=model_data['reg_bias'], 
-              reg_pq=model_data['reg_pq'], 
-              reg_weight=0.02, epochs=model_data['epochs'], 
-              svd_method='basis', 
-              training_method='AttributesSVD++')
-    svd.μ = model_data['μ']
-    svd.b_x = model_data['b_x']
-    svd.b_i = model_data['b_i']
-    svd.P = model_data['P']
-    svd.Q = model_data['Q']
-    
+    # model_data = load_from_pickle('data/cache/pkls/model_20_0.005_0.02_0.02_0.02_30_basis_AttributesSVD++.pkl')
+    # num_factors = model_data['num_factors']
+    # learning_rate = model_data['learning_rate']
+    # reg_bias = model_data['reg_bias']
+    # reg_pq = model_data['reg_pq']
+    # epochs = model_data['epochs']
+    # svd_method = "basis"
+    # training_method = "AttributesSVD++"
+
+    # print(model_data['num_factors'])
+    # print(model_data['learning_rate'])
+    # print(model_data['reg_bias'])
+    # print(model_data['epochs'])
+    # print(model_data['μ'])
+    # print(model_data['b_x'])
+    # print(model_data['b_i'])
+    # print(model_data['P'])
+    # print(model_data['Q'])
+    # svd = SVD(num_factors=model_data['num_factors'], 
+    #           learning_rate=model_data['learning_rate'], 
+    #           reg_bias=model_data['reg_bias'], 
+    #           reg_pq=model_data['reg_pq'], 
+    #           reg_weight=0.02, epochs=1, 
+    #           svd_method='basis', 
+    #           training_method='AttributesSVD++')
+    # svd.μ = model_data['μ']
+    # svd.b_x = model_data['b_x']
+    # svd.b_i = model_data['b_i']
+    # svd.P = model_data['P']
+    # svd.Q = model_data['Q']
+
+    # svd.fit(user_ratings)
+
+    # # Save the model on name includes all the hyperparameters
+    # model_name = f'{models_path}_{num_factors}_{learning_rate}_{reg_bias}_{reg_pq}_{0.02}_{epochs}_{svd_method}_{training_method}.pkl'
+    # svd.save_model(model_name)
+    # losses_name = f'{models_path}_{num_factors}_{learning_rate}_{reg_bias}_{reg_pq}_{0.02}_{epochs}_{svd_method}_{training_method}_losses.pkl'
+    # svd.save_losses(losses_name)
 
     # # Example prediction
     # user_id = 0
     # item_id = 378216
     # rating = svd.predict(user_id, item_id)
     # print(f'Predicted rating for user {user_id} and item {item_id}: {rating}')
+
+
+
+
+    svd = SVD(training_method='AttributesSVD++')
+    svd.split_data(user_ratings)
+    svd.load_model('data\cache\pkls\model_100_0.005_0.02_0.02_0.02_1_0.8_True_basis_AttributesSVD++.pkl')
+
+    # Evaluate the model
+    rmse = svd.evaluate()
+    print(f'RMSE on evaluation set: {rmse}')
