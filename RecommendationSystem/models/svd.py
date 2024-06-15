@@ -120,6 +120,9 @@ class SVD:
         """
         Evaluate the model on the given data.
         """
+        if(self.eval_set is None):
+            self.logger.error("The evaluation set is not provided.")
+            return None
         self.logger.info("Starting evaluation")
         errors = []
         for user, ratings_list in self.eval_set.items():
@@ -221,6 +224,9 @@ class SVD:
             rmse = np.sqrt(np.mean(np.square(epoch_errors)))
             self.losses.append(rmse)
             self.logger.info(f"Epoch {epoch + 1} completed. RMSE: {rmse:.4f}")
+            if (epoch + 1) % 1 == 0:
+                self.save_intermediate_rmse(epoch + 1, rmse)
+                self.save_intermediate_model(epoch + 1)
 
     def plot_losses(self):
         """
@@ -378,22 +384,57 @@ class SVD:
 
         self.logger.info(f"Model loaded from {path}")
 
+    def save_intermediate_model(self, epoch):
+        """
+        Save the model parameters at intermediate stages.
+        :param epoch: int, the current epoch number
+        """
+        model_name = f'{models_path}_{num_factors}_{learning_rate}_{reg_bias}_{reg_pq}_{reg_weight}_{epochs}_{train_ratio}_{shuffle}_{svd_method}_{training_method}'
+        path = f"{model_name}_epoch_{epoch}.pkl"
+        model_data = {
+            'num_factors': self.num_factors,
+            'learning_rate': self.learning_rate,
+            'reg_bias': self.reg_bias,
+            'reg_pq': self.reg_pq,
+            'reg_weight': self.reg_weight,
+            'epochs': self.epochs,
+            'μ': self.μ,
+            'b_x': self.b_x,
+            'b_i': self.b_i,
+            'P': self.P,
+            'Q': self.Q,
+            'attribute_weight': self.attribute_weight,
+        }
+        with open(path, 'wb') as f:
+            pickle.dump(model_data, f)
+        self.logger.info(f"Intermediate model at epoch {epoch} saved to {path}")
 
+    def save_intermediate_rmse(self, epoch, rmse):
+        """
+        Save the RMSE at intermediate stages.
+        :param epoch: int, the current epoch number
+        :param rmse: float, the RMSE at the current epoch
+        """
+        losses_name = f'{models_path}_{self.num_factors}_{self.learning_rate}_{self.reg_bias}_{self.reg_pq}_{self.reg_weight}_{self.epochs}_{self.train_ratio}_{self.shuffle}_{self.svd_method}_{self.training_method}_losses'
+        path = f"{losses_name}_epoch_{epoch}.pkl"
+        with open(path, 'wb') as f:
+            pickle.dump(rmse, f)
+        self.logger.info(f"Intermediate RMSE at epoch {epoch} saved to {path}")
 
 if __name__ == "__main__":
 
     user_ratings = load_from_pickle('data/cache/pkls/user_ratings.pkl')
     # Initialize and train the SVD model
-    num_factors = 100
+    num_factors = 20
     learning_rate = 0.005
     reg_bias = 0.02
     reg_pq = 0.02
     reg_weight = 0.02
-    epochs = 1
+    epochs = 3
     train_ratio = 1.0
     shuffle = False
     svd_method = "basis"
-    training_method = "AttributesSVD++"
+    training_method = "basis"
 
 
 
@@ -412,6 +453,8 @@ if __name__ == "__main__":
     losses_name = f'{models_path}_{num_factors}_{learning_rate}_{reg_bias}_{reg_pq}_{reg_weight}_{epochs}_{train_ratio}_{shuffle}_{svd_method}_{training_method}_losses.pkl'
     svd.save_losses(losses_name)
 
+
+    # losses = load_from_pickle('data/cache/pkls/model_20_0.005_0.02_0.02_0.02_30_basis_AttributesSVD++_losses.pkls')
 
 
     # svd = SVD(training_method='AttributesSVD++')
