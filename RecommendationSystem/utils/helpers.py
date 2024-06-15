@@ -424,10 +424,49 @@ def split_training_data(user_ratings, validation_ratio=0.2, shuffle=True, random
         validation_data[user_id] = ratings[split_index:]
     return train_data, validation_data
 
-def load_attribute_data(attribute_path, index_map):
-    """
+def process_item_attributes(attribute_data_path, processed_attributes_path):
+    items = []
+    attr1 = []
+    attr2 = []
 
-    """
+    with open(attribute_data_path, 'r') as file:
+        for line in file:
+            parts = line.strip().split('|')
+            item_id = int(parts[0])
+            attribute_1 = None if parts[1] == 'None' else float(parts[1])
+            attribute_2 = None if parts[2] == 'None' else float(parts[2])
+            items.append(item_id)
+            attr1.append(attribute_1)
+            attr2.append(attribute_2)
+
+    attr1 = np.array(attr1, dtype=np.float64)
+    attr2 = np.array(attr2, dtype=np.float64)
+
+    mean_attr_1 = np.nanmean(attr1)
+    mean_attr_2 = np.nanmean(attr2)
+
+    attr1[np.isnan(attr1)] = mean_attr_1
+    attr2[np.isnan(attr2)] = mean_attr_2
+
+    attr1 = (attr1 - np.min(attr1)) / (np.max(attr1) - np.min(attr1))
+    attr2 = (attr2 - np.min(attr2)) / (np.max(attr2) - np.min(attr2))
+
+    mean_norm_attr_1 = np.mean(attr1)
+    mean_norm_attr_2 = np.mean(attr2)
+
+    attr1 -= mean_norm_attr_1
+    attr2 -= mean_norm_attr_2
+
+    processed_data = []
+    for item_id, a1, a2 in zip(items, attr1, attr2):
+        processed_data.append(f"{item_id}|{a1}|{a2}")
+
+    save_to_pickle(processed_data, 'data/cache/pkls/processed_attributes.pkl')
+    with open(processed_attributes_path, 'w') as file:
+        for line in processed_data:
+            file.write(line + '\n')
+
+    return processed_data
 
 def load_statistical_data(user_ratings, item_raters):
     """
